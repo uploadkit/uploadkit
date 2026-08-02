@@ -25,7 +25,15 @@ Use Core when you need a reusable upload pipeline that you can plug into any fra
 Requires **Python 3.10+**.
 
 ```bash
-pip install uploadkit
+pip install uploadkit uploadkit-security
+```
+
+```bash
+uv add uploadkit uploadkit-security
+```
+
+```bash
+poetry add uploadkit uploadkit-security
 ```
 
 ## Quick Start
