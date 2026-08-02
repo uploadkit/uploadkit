@@ -52,6 +52,23 @@ result = uploader.upload(file, bucket="uploads", object_name="2026/file.bin")
 # result.bucket, result.object_name, result.sha256, …
 ```
 
+### Async streaming (separate stack)
+
+```python
+from uploadkit import AsyncUploader, UploadPolicy
+from uploadkit_security import default_async_validators
+
+policy = UploadPolicy(
+    max_size=5 * 1024 * 1024,
+    async_validators=default_async_validators(),
+)
+result = await AsyncUploader(policy, async_storage).upload(
+    source,  # AsyncByteSource
+    bucket="uploads",
+    object_name="2026/file.bin",
+)
+```
+
 Compose security validators from `uploadkit-security`:
 
 ```python
