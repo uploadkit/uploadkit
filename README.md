@@ -301,11 +301,71 @@ validators = default_validators()                 # sync Uploader
 async_validators = default_async_validators()     # AsyncUploader
 ```
 
+## After-upload hooks
+
+Pass an optional `after_upload` keyword to `Uploader.upload` / `AsyncUploader.upload`. The hook runs **once** after a successful store, before the method returns `UploadResult`. It does **not** run on validation or storage failure. Hook exceptions **propagate** (they are not swallowed).
+
+Accepted shapes:
+
+1. **Sync callback** — `(result: UploadResult) -> None`
+2. **Async callback** — sync or `async def` on `AsyncUploader` (awaited)
+3. **Celery-like** — any object with `.delay(**kwargs)`; Core calls `delay(**result.as_task_kwargs())` (no Celery import)
+
+`UploadResult.as_task_kwargs()` is JSON-serializable: `bucket`, `object_name`, `original_name`, `mime_type`, `extension`, `size`, `sha256`, `etag`.
+
+### Sync callback
+
+```python
+def notify(result):
+    # e.g. write an audit row, publish an event
+    ...
+
+result = Uploader(policy, storage).upload(
+    file,
+    bucket="uploads",
+    object_name="2026/file.png",
+    after_upload=notify,
+)
+```
+
+### Celery-like task
+
+```python
+# myapp/tasks.py — Celery (or any .delay duck-type)
+@app.task
+def process_upload(bucket, object_name, original_name, mime_type,
+                   extension, size, sha256, etag):
+    ...
+
+result = Uploader(policy, storage).upload(
+    file,
+    bucket="uploads",
+    object_name="2026/file.png",
+    after_upload=process_upload,  # Core calls process_upload.delay(**as_task_kwargs())
+)
+```
+
+### Async callback
+
+```python
+async def notify(result):
+    ...
+
+result = await AsyncUploader(policy, async_storage).upload(
+    source,
+    bucket="uploads",
+    object_name="2026/file.png",
+    after_upload=notify,  # or a sync callback, or Celery-like .delay
+)
+```
+
+FastAPI apps can also use `background_after_upload` from `uploadkit-fastapi` to schedule work via Starlette `BackgroundTasks`.
+
 ## Architecture
 
 ```text
 Sync:  Uploader.upload → validators → StorageProvider.put → UploadResult → after_upload
-Async: AsyncUploader.upload → async validators feed → AsyncStorageProvider writer → UploadResult
+Async: AsyncUploader.upload → async validators feed → AsyncStorageProvider writer → UploadResult → after_upload
 ```
 
 ## Public API
@@ -314,12 +374,12 @@ Async: AsyncUploader.upload → async validators feed → AsyncStorageProvider w
 |--------|------|
 | `Uploader` / `AsyncUploader` | Public |
 | `UploadPolicy` | Public (`validators` / `async_validators`) |
-| `UploadResult` / `UploadContext` | Public |
+| `UploadResult` / `UploadContext` | Public (`UploadResult.as_task_kwargs`) |
 | `UploadableFile` / `AsyncByteSource` | Public (protocols) |
 | `StorageProvider` / `AsyncStorageProvider` / `AsyncObjectWriter` | Public (protocols) |
 | `Validator` / `AsyncStreamingValidator` | Public |
 | `UploaderError` and subclasses | Public |
-| `AfterUploadHook` / async after-upload | Public |
+| `AfterUploadHook` / `AsyncAfterUploadHook` | Public |
 
 ## Framework integrations
 
